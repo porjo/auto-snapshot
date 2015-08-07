@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -12,12 +13,19 @@ import (
 
 type tagslice []*string
 
-func (i *tagslice) String() string {
-	return fmt.Sprintf("%s", *i)
+func (t tagslice) String() string {
+	var str string
+	for i, key := range t {
+		if i != 0 {
+			str += ", "
+		}
+		str += *key
+	}
+	return str
 }
 
-func (i *tagslice) Set(value string) error {
-	*i = append(*i, &value)
+func (t *tagslice) Set(value string) error {
+	*t = append(*t, &value)
 	return nil
 }
 
@@ -35,7 +43,8 @@ func main() {
 	flag.Parse()
 
 	if len(tags) == 0 {
-		log.Fatal("You must specify at least one tag")
+		fmt.Println("You must specify at least one tag")
+		os.Exit(1)
 	}
 
 	config := aws.NewConfig()
@@ -49,15 +58,19 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if len(volumes) == 0 {
+		log.Printf("No volumes found matching tags: %s\n", tags)
+	}
+
 	for _, volume := range volumes {
 		csi := ec2.CreateSnapshotInput{}
 		csi.VolumeID = volume.VolumeID
-		volname, _ := GetTagValue("Name", volume.Tags)
+		volname, _ := getTagValue("Name", volume.Tags)
 		var description string
 		if volname == "" {
-			description = fmt.Sprintf("ec2ab %s  - %s", volume.VolumeID, time.Now())
+			description = fmt.Sprintf("ec2ab %s", *volume.VolumeID)
 		} else {
-			description = fmt.Sprintf("ec2ab %s (%s) - %s", volname, volume.VolumeID, time.Now())
+			description = fmt.Sprintf("ec2ab %s (%s)", volname, *volume.VolumeID)
 
 		}
 		csi.Description = &description
@@ -67,12 +80,13 @@ func main() {
 			log.Fatal(err)
 		}
 
+		log.Printf("Snapshotting volume, Name: %s, VolumeID: %s\n", volname, *volume.VolumeID)
+
 		err = CreateSnapshotTags(svc, *cso.SnapshotID, volname, *volume.VolumeID)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		fmt.Printf("volume %s, %v", volume.VolumeID, volume)
 	}
 }
 
@@ -85,9 +99,9 @@ func CreateSnapshotTags(svc *ec2.EC2, resourceID, volumeName, volumeID string) e
 	nKey = "Name"
 
 	if volumeName == "" {
-		nVal = fmt.Sprintf("ec2ab %s", volumeID)
+		nVal = fmt.Sprintf("ec2ab %s, %s", volumeID, time.Now().Format("2006-01-02"))
 	} else {
-		nVal = fmt.Sprintf("ec2ab %s (%s)", volumeName, volumeID)
+		nVal = fmt.Sprintf("ec2ab %s, %s", volumeName, time.Now().Format("2006-01-02"))
 	}
 	tags = append(tags, &ec2.Tag{Key: &nKey, Value: &nVal})
 
@@ -126,20 +140,16 @@ func GetVolumes(svc *ec2.EC2) ([]*ec2.Volume, error) {
 		dvi.Filters = append(dvi.Filters, filter)
 	}
 
-	fmt.Printf("filters %+v", dvi.Filters)
-
 	dvo, err := svc.DescribeVolumes(&dvi)
 	if err != nil {
 		return nil, fmt.Errorf("describeVolumes error, %s", err)
 	}
 
-	fmt.Printf("dvo %+v", dvo)
-
 	return dvo.Volumes, nil
 }
 
-// GetTagValue returns the value for the first matched key
-func GetTagValue(key string, tags []*ec2.Tag) (string, bool) {
+// getTagValue returns the value for the first matched key
+func getTagValue(key string, tags []*ec2.Tag) (string, bool) {
 	for _, tag := range tags {
 		if *tag.Key == key {
 			return *tag.Value, true
