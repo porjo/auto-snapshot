@@ -29,15 +29,21 @@ func (t *tagslice) Set(value string) error {
 	return nil
 }
 
+const (
+	PurgeAfterKey    = "PurgeAfterr"
+	PurgeAllowKey    = "PurgeAlloww"
+	PurgeAfterFormat = time.RFC3339
+)
+
 var (
 	tags           tagslice
 	region         = flag.String("region", "", "AWS region to use")
+	tagPrefix      = flag.String("tagPrefix", "auto-snap", "String to prefix to tag name, description")
 	purgeAfterDays = flag.Int("k", 0, "Purge snapshot after this many days. Zero value means never purge")
+	purgeSnapshots = flag.Bool("p", true, "Enable purging of snapshots")
 )
 
 func main() {
-	var err error
-	var volumes []*ec2.Volume
 
 	flag.Var(&tags, "tags", "Select EBS volumes using these tag keys e.g. 'Daily-Backup'. Tag values should be == 'true'")
 	flag.Parse()
@@ -53,9 +59,23 @@ func main() {
 	}
 	svc := ec2.New(config)
 
-	volumes, err = GetVolumes(svc)
+	err := CreateSnapshots(svc)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if *purgeSnapshots {
+		err = PurgeSnapshots(svc)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func CreateSnapshots(svc *ec2.EC2) error {
+	volumes, err := GetBackupVolumes(svc)
+	if err != nil {
+		return err
 	}
 
 	if len(volumes) == 0 {
@@ -68,26 +88,76 @@ func main() {
 		volname, _ := getTagValue("Name", volume.Tags)
 		var description string
 		if volname == "" {
-			description = fmt.Sprintf("ec2ab %s", *volume.VolumeID)
+			description = fmt.Sprintf("%s: %s", *tagPrefix, *volume.VolumeID)
 		} else {
-			description = fmt.Sprintf("ec2ab %s (%s)", volname, *volume.VolumeID)
-
+			description = fmt.Sprintf("%s: %s (%s)", *tagPrefix, volname, *volume.VolumeID)
 		}
 		csi.Description = &description
 
 		cso, err := svc.CreateSnapshot(&csi)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
-		log.Printf("Snapshotting volume, Name: %s, VolumeID: %s\n", volname, *volume.VolumeID)
+		log.Printf("snapshotting volume, Name: %s, VolumeID: %s, Size: %d GiB\n", volname, *volume.VolumeID, *volume.Size)
 
 		err = CreateSnapshotTags(svc, *cso.SnapshotID, volname, *volume.VolumeID)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 	}
+
+	return nil
+}
+
+func PurgeSnapshots(svc *ec2.EC2) error {
+
+	dsi := ec2.DescribeSnapshotsInput{}
+
+	filter := &ec2.Filter{}
+	filterName := "tag:" + PurgeAllowKey
+	filter.Name = &filterName
+	value := "true"
+	filter.Values = []*string{&value}
+	dsi.Filters = append(dsi.Filters, filter)
+
+	dso, err := svc.DescribeSnapshots(&dsi)
+	if err != nil {
+		return fmt.Errorf("describeSnapshots error, %s", err)
+	}
+
+	purgeCount := 0
+	for _, snapshot := range dso.Snapshots {
+		var paVal string
+		var found bool
+
+		if paVal, found = getTagValue(PurgeAfterKey, snapshot.Tags); !found {
+			log.Printf("snapshot ID %s has tag '%s' but does not have a '%s' tag. Skipping purge...", *snapshot.SnapshotID, PurgeAllowKey, PurgeAfterKey)
+			continue
+		}
+
+		pa, err := time.Parse(PurgeAfterFormat, paVal)
+		if err != nil {
+			return err
+		}
+
+		if pa.Before(time.Now()) {
+			deli := ec2.DeleteSnapshotInput{}
+			deli.SnapshotID = snapshot.SnapshotID
+
+			_, err := svc.DeleteSnapshot(&deli)
+			if err != nil {
+				return fmt.Errorf("error purging Snapshot ID %s, err %s", *snapshot.SnapshotID, err)
+			}
+			log.Printf("snapshot ID '%s' purged, size %d GiB\n", *snapshot.SnapshotID, *snapshot.VolumeSize)
+			purgeCount++
+		}
+	}
+
+	log.Printf("%d snapshots purged\n", purgeCount)
+
+	return nil
 }
 
 func CreateSnapshotTags(svc *ec2.EC2, resourceID, volumeName, volumeID string) error {
@@ -99,20 +169,20 @@ func CreateSnapshotTags(svc *ec2.EC2, resourceID, volumeName, volumeID string) e
 	nKey = "Name"
 
 	if volumeName == "" {
-		nVal = fmt.Sprintf("ec2ab %s, %s", volumeID, time.Now().Format("2006-01-02"))
+		nVal = fmt.Sprintf("%s: %s, %s", *tagPrefix, volumeID, time.Now().Format("2006-01-02"))
 	} else {
-		nVal = fmt.Sprintf("ec2ab %s, %s", volumeName, time.Now().Format("2006-01-02"))
+		nVal = fmt.Sprintf("%s: %s, %s", *tagPrefix, volumeName, time.Now().Format("2006-01-02"))
 	}
 	tags = append(tags, &ec2.Tag{Key: &nKey, Value: &nVal})
 
 	if *purgeAfterDays > 0 {
 		var paKey, paVal string
 		var pKey, pVal string
-		paKey = "PurgeAfter"
-		paVal = time.Now().String()
+		paKey = PurgeAfterKey
+		paVal = time.Now().Add(time.Duration(*purgeAfterDays*24) * time.Hour).Format(PurgeAfterFormat)
 		tags = append(tags, &ec2.Tag{Key: &paKey, Value: &paVal})
 
-		pKey = "PurgeAllow"
+		pKey = PurgeAllowKey
 		pVal = "true"
 		tags = append(tags, &ec2.Tag{Key: &pKey, Value: &pVal})
 	}
@@ -128,7 +198,7 @@ func CreateSnapshotTags(svc *ec2.EC2, resourceID, volumeName, volumeID string) e
 	return nil
 }
 
-func GetVolumes(svc *ec2.EC2) ([]*ec2.Volume, error) {
+func GetBackupVolumes(svc *ec2.EC2) ([]*ec2.Volume, error) {
 	dvi := ec2.DescribeVolumesInput{}
 
 	for _, tag := range tags {
