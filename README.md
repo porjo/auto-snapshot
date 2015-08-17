@@ -6,6 +6,8 @@ Automate EC2 volume snapshots. Inspired by [ec2-automate-backup](https://github.
 - timestamps stored in human readable form
 - name and description tags include volume's friendly name, for easy identification
 
+<img>http://porjo.github.io/auto-snapshot/snapshots.png</img>
+
 ## Usage
 
 [Setup an EC2 instance with an appropriate IAM role to allow snapshots to be created/deleted.](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html)
