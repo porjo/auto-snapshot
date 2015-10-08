@@ -9,6 +9,12 @@ Automate EC2 volume snapshots. Inspired by [ec2-automate-backup](https://github.
 ## Usage
 
 Get a [precompiled binary](https://github.com/porjo/auto-snapshot/releases) or compile from source using Go build tools
+=======
+<img src="http://porjo.github.io/auto-snapshot/snapshots.png"></img>
+
+## Usage
+
+[Setup an EC2 instance with an appropriate IAM role to allow snapshots to be created/deleted.](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html)
 
 ```
 $ ./auto-backup --help
@@ -24,4 +30,13 @@ Typical usage:
 
 ```
 ./auto-snapshot -region="ap-southeast-2" -tags="Backup-Daily" -k=3
+```
+
+## Building
+
+Get a [precompiled binary](https://github.com/porjo/auto-snapshot/releases) for Linux or compile from source using Go build tools
+
+```
+go get -u github.com/porjo/auto-snapshot
+$GOPATH/bin/auto-snapshot
 ```
