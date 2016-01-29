@@ -30,9 +30,10 @@ func (t *tagslice) Set(value string) error {
 }
 
 const (
-	PurgeAfterKey    = "PurgeAfterr"
-	PurgeAllowKey    = "PurgeAlloww"
-	PurgeAfterFormat = time.RFC3339
+	PurgeAfterKey       = "PurgeAfterr"
+	PurgeAllowKey       = "PurgeAlloww"
+	PurgeAfterFormat    = time.RFC3339
+	MinSnapshotInterval = time.Duration(15) * time.Second
 )
 
 var (
@@ -106,6 +107,7 @@ func CreateSnapshots(svc *ec2.EC2) error {
 			return err
 		}
 
+		time.Sleep(MinSnapshotInterval)
 	}
 
 	return nil
