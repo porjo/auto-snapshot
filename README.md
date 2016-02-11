@@ -15,13 +15,17 @@ Automate EC2 volume snapshots. Inspired by [ec2-automate-backup](https://github.
 [Setup an EC2 instance with an appropriate IAM role to allow snapshots to be created/deleted.](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html)
 
 ```
-$ ./auto-backup --help
-Usage of ./auto-backup:
-  -k=0: Purge snapshot after this many days. Zero value means never purge
-  -p=true: Enable purging of snapshots
-  -region="": AWS region to use
-  -tagPrefix="auto-snap": String to prefix to tag name, description
-  -tags=: Select EBS volumes using these tag keys e.g. 'Daily-Backup'. Tag values should be == 'true'
+$ ./auto-snapshot --help
+Usage of ./auto-snapshot:
+  -k int
+    	Purge snapshot after this many days. Zero value means never purge
+  -p	Enable purging of snapshots (default true)
+  -region string
+    	AWS region to use
+  -tagPrefix string
+    	String to prefix to tag name, description (default "auto-snap")
+  -tags value
+    	Select EBS volumes using these tag keys e.g. 'Daily-Backup'. Tag values should be == 'true'
 ```
 
 Typical usage:
