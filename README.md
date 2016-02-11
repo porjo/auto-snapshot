@@ -9,7 +9,9 @@ Automate EC2 volume snapshots. Inspired by [ec2-automate-backup](https://github.
 ## Usage
 
 Get a [precompiled binary](https://github.com/porjo/auto-snapshot/releases) or compile from source using Go build tools
+
 =======
+
 <img src="http://porjo.github.io/auto-snapshot/snapshots.png"></img>
 
 ## Usage
