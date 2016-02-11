@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
@@ -58,7 +59,7 @@ func main() {
 	if *region != "" {
 		config.Region = region
 	}
-	svc := ec2.New(config)
+	svc := ec2.New(session.New(), config)
 
 	err := CreateSnapshots(svc)
 	if err != nil {
@@ -85,13 +86,13 @@ func CreateSnapshots(svc *ec2.EC2) error {
 
 	for _, volume := range volumes {
 		csi := ec2.CreateSnapshotInput{}
-		csi.VolumeID = volume.VolumeID
+		csi.VolumeId = volume.VolumeId
 		volname, _ := getTagValue("Name", volume.Tags)
 		var description string
 		if volname == "" {
-			description = fmt.Sprintf("%s: %s", *tagPrefix, *volume.VolumeID)
+			description = fmt.Sprintf("%s: %s", *tagPrefix, *volume.VolumeId)
 		} else {
-			description = fmt.Sprintf("%s: %s (%s)", *tagPrefix, volname, *volume.VolumeID)
+			description = fmt.Sprintf("%s: %s (%s)", *tagPrefix, volname, *volume.VolumeId)
 		}
 		csi.Description = &description
 
@@ -100,9 +101,9 @@ func CreateSnapshots(svc *ec2.EC2) error {
 			return err
 		}
 
-		log.Printf("snapshotting volume, Name: %s, VolumeID: %s, Size: %d GiB\n", volname, *volume.VolumeID, *volume.Size)
+		log.Printf("snapshotting volume, Name: %s, VolumeId: %s, Size: %d GiB\n", volname, *volume.VolumeId, *volume.Size)
 
-		err = CreateSnapshotTags(svc, *cso.SnapshotID, volname, *volume.VolumeID)
+		err = CreateSnapshotTags(svc, *cso.SnapshotId, volname, *volume.VolumeId)
 		if err != nil {
 			return err
 		}
@@ -135,7 +136,7 @@ func PurgeSnapshots(svc *ec2.EC2) error {
 		var found bool
 
 		if paVal, found = getTagValue(PurgeAfterKey, snapshot.Tags); !found {
-			log.Printf("snapshot ID %s has tag '%s' but does not have a '%s' tag. Skipping purge...", *snapshot.SnapshotID, PurgeAllowKey, PurgeAfterKey)
+			log.Printf("snapshot ID %s has tag '%s' but does not have a '%s' tag. Skipping purge...", *snapshot.SnapshotId, PurgeAllowKey, PurgeAfterKey)
 			continue
 		}
 
@@ -146,13 +147,13 @@ func PurgeSnapshots(svc *ec2.EC2) error {
 
 		if pa.Before(time.Now()) {
 			deli := ec2.DeleteSnapshotInput{}
-			deli.SnapshotID = snapshot.SnapshotID
+			deli.SnapshotId = snapshot.SnapshotId
 
 			_, err := svc.DeleteSnapshot(&deli)
 			if err != nil {
-				return fmt.Errorf("error purging Snapshot ID %s, err %s", *snapshot.SnapshotID, err)
+				return fmt.Errorf("error purging Snapshot ID %s, err %s", *snapshot.SnapshotId, err)
 			}
-			log.Printf("snapshot ID '%s' purged, size %d GiB\n", *snapshot.SnapshotID, *snapshot.VolumeSize)
+			log.Printf("snapshot ID '%s' purged, size %d GiB\n", *snapshot.SnapshotId, *snapshot.VolumeSize)
 			purgeCount++
 		}
 	}
