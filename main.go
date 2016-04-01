@@ -131,7 +131,7 @@ func CreateSnapshots(svc *ec2.EC2) error {
 		}
 
 		if len(volumes) > 1 {
-			time.Sleep(MinSnapshotInterval)
+			time.Sleep(time.Duration(MinSnapshotInterval) * time.Second)
 		}
 	}
 
