@@ -4,10 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
@@ -34,7 +36,8 @@ const (
 	PurgeAfterKey       = "PurgeAfterr"
 	PurgeAllowKey       = "PurgeAlloww"
 	PurgeAfterFormat    = time.RFC3339
-	MinSnapshotInterval = time.Duration(15) * time.Second
+	MinSnapshotInterval = 15 //seconds
+	MaxSnapshotRetries  = 3
 )
 
 var (
@@ -96,19 +99,40 @@ func CreateSnapshots(svc *ec2.EC2) error {
 		}
 		csi.Description = &description
 
-		cso, err := svc.CreateSnapshot(&csi)
-		if err != nil {
-			return err
+		var err error
+		var snap *ec2.Snapshot
+		retries := 0
+		for {
+			snap, err = svc.CreateSnapshot(&csi)
+			if err != nil {
+				if aerr, ok := err.(awserr.Error); ok {
+					retries++
+					if retries > MaxSnapshotRetries {
+						return fmt.Errorf("Maximum snapshot retries reached for volume %s", *volume.VolumeId)
+					}
+					if aerr.Code() == "SnapshotCreationPerVolumeRateExceeded" {
+						sleep := time.Duration(MinSnapshotInterval+math.Pow(float64(5), float64(retries))) * time.Second
+						log.Printf("SnapshotCreationPerVolumeRateExceeded, sleeping for %f\n", sleep.Seconds())
+						time.Sleep(sleep)
+					}
+				} else {
+					return err
+				}
+			} else {
+				break
+			}
 		}
 
 		log.Printf("snapshotting volume, Name: %s, VolumeId: %s, Size: %d GiB\n", volname, *volume.VolumeId, *volume.Size)
 
-		err = CreateSnapshotTags(svc, *cso.SnapshotId, volname, *volume.VolumeId)
+		err = CreateSnapshotTags(svc, *snap.SnapshotId, volname, *volume.VolumeId)
 		if err != nil {
 			return err
 		}
 
-		time.Sleep(MinSnapshotInterval)
+		if len(volumes) > 1 {
+			time.Sleep(MinSnapshotInterval)
+		}
 	}
 
 	return nil
