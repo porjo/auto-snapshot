@@ -55,6 +55,7 @@ func main() {
 
 	if len(tags) == 0 {
 		fmt.Println("You must specify at least one tag")
+		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
@@ -123,7 +124,7 @@ func CreateSnapshots(svc *ec2.EC2) error {
 			}
 		}
 
-		log.Printf("snapshotting volume, Name: %s, VolumeId: %s, Size: %d GiB\n", volname, *volume.VolumeId, *volume.Size)
+		log.Printf("snapshotting volume, Name: '%s', VolumeId: %s, Size: %d GiB\n", volname, *volume.VolumeId, *volume.Size)
 
 		err = CreateSnapshotTags(svc, *snap.SnapshotId, volname, *volume.VolumeId)
 		if err != nil {
@@ -188,7 +189,6 @@ func PurgeSnapshots(svc *ec2.EC2) error {
 }
 
 func CreateSnapshotTags(svc *ec2.EC2, resourceID, volumeName, volumeID string) error {
-
 	var nKey, nVal string
 
 	var tags []*ec2.Tag
