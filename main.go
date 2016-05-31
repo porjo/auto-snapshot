@@ -88,7 +88,7 @@ func CreateSnapshots(svc *ec2.EC2) error {
 		log.Printf("No volumes found matching tags: %s\n", tags)
 	}
 
-	for _, volume := range volumes {
+	for i, volume := range volumes {
 		csi := ec2.CreateSnapshotInput{}
 		csi.VolumeId = volume.VolumeId
 		volname, _ := getTagValue("Name", volume.Tags)
@@ -131,7 +131,8 @@ func CreateSnapshots(svc *ec2.EC2) error {
 			return err
 		}
 
-		if len(volumes) > 1 {
+		// wait before kicking off next snapshot
+		if i < (len(volumes) - 1) {
 			time.Sleep(time.Duration(MinSnapshotInterval) * time.Second)
 		}
 	}
