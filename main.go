@@ -33,8 +33,8 @@ func (t *tagslice) Set(value string) error {
 }
 
 const (
-	PurgeAfterKey       = "PurgeAfterr"
-	PurgeAllowKey       = "PurgeAlloww"
+	PurgeAfterKey       = "PurgeAfter"
+	PurgeAllowKey       = "PurgeAllow"
 	PurgeAfterFormat    = time.RFC3339
 	MinSnapshotInterval = 15 //seconds
 	MaxSnapshotRetries  = 3
@@ -88,6 +88,8 @@ func CreateSnapshots(svc *ec2.EC2) error {
 		log.Printf("No volumes found matching tags: %s\n", tags)
 	}
 
+	log.Printf("\nSnapshotting volumes...\n")
+
 	for i, volume := range volumes {
 		csi := ec2.CreateSnapshotInput{}
 		csi.VolumeId = volume.VolumeId
@@ -124,7 +126,7 @@ func CreateSnapshots(svc *ec2.EC2) error {
 			}
 		}
 
-		log.Printf("snapshotting volume, Name: '%s', VolumeId: %s, Size: %d GiB\n", volname, *volume.VolumeId, *volume.Size)
+		fmt.Printf("Name: %-15s VolumeId: %-22s Size: %4d GiB\n", volname, *volume.VolumeId, *volume.Size)
 
 		err = CreateSnapshotTags(svc, *snap.SnapshotId, volname, *volume.VolumeId)
 		if err != nil {
@@ -156,6 +158,7 @@ func PurgeSnapshots(svc *ec2.EC2) error {
 		return fmt.Errorf("describeSnapshots error, %s", err)
 	}
 
+	log.Printf("\nPurging Snapshots...\n")
 	purgeCount := 0
 	for _, snapshot := range dso.Snapshots {
 		var paVal string
@@ -180,12 +183,14 @@ func PurgeSnapshots(svc *ec2.EC2) error {
 			if err != nil {
 				return fmt.Errorf("error purging Snapshot ID %s, err %s", *snapshot.SnapshotId, err)
 			}
-			log.Printf("snapshot ID '%s' purged, size %d GiB\n", *snapshot.SnapshotId, *snapshot.VolumeSize)
+			fmt.Printf("ID: %-22s Size: %4d GiB\n", *snapshot.SnapshotId, *snapshot.VolumeSize)
 			purgeCount++
 		}
 	}
 
-	log.Printf("%d snapshots purged\n", purgeCount)
+	if purgeCount == 0 {
+		fmt.Printf("No snapshots were purged\n")
+	}
 
 	return nil
 }
