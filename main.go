@@ -171,7 +171,8 @@ func PurgeSnapshots(svc *ec2.EC2) error {
 			return err
 		}
 
-		if pa.Before(time.Now()) {
+		nowDate := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.UTC)
+		if pa.Before(nowDate) {
 			deli := ec2.DeleteSnapshotInput{}
 			deli.SnapshotId = snapshot.SnapshotId
 
@@ -207,7 +208,8 @@ func CreateSnapshotTags(svc *ec2.EC2, resourceID, volumeName, volumeID string) e
 		var paKey, paVal string
 		var pKey, pVal string
 		paKey = PurgeAfterKey
-		paVal = time.Now().Add(time.Duration(*purgeAfterDays*24) * time.Hour).Format(PurgeAfterFormat)
+		paDate := time.Now().Add(time.Duration(*purgeAfterDays*24) * time.Hour)
+		paVal = time.Date(paDate.Year(), paDate.Month(), paDate.Day(), 0, 0, 0, 0, time.UTC).Format(PurgeAfterFormat)
 		tags = append(tags, &ec2.Tag{Key: &paKey, Value: &paVal})
 
 		pKey = PurgeAllowKey
