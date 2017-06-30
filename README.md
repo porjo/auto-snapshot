@@ -6,7 +6,7 @@ Automate EC2 volume snapshots. Inspired by [ec2-automate-backup](https://github.
 - timestamps stored in human readable form
 - name and description tags include volume's friendly name, for easy identification
 
-=======
+---
 
 <img src="http://porjo.github.io/auto-snapshot/snapshots.png"></img>
 
