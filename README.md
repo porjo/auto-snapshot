@@ -32,13 +32,13 @@ Typical usage:
 
 Tag each EBS volume that you would like to include in the automatic snapshot with a unique tag key e.g. `Backup-Daily` and set the tag's value to `true`. Run `auto-snapshot` and specify the tag key that you used, together with the number of days snapshots should be kept. Here are some example crontab entries:
 
-```
+```bash
 # Auto-snapshot: run every day, and create a snapshot that lasts 4 days
 # (this is intended to cover long weekends)
 0 0 * * * 	/home/backup/auto-snapshot -region="ap-southeast-2" -tags="Backup-Daily" -k=4
 
 # Run once every 30 days, and create a snapshot that lasts 60 days
-# at any given time, we should have a 1 month old, and 2 month old snapshot
+# at any given time, we should have a snapshot *at least* 1 month old
 0 0 */30 * * 	/home/backup/auto-snapshot -region="ap-southeast-2" -tags="Backup-Monthly" -k=60
 
 ```
