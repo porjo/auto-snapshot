@@ -37,17 +37,20 @@ Tag each EBS volume that you would like to include in the automatic snapshot wit
 # (this is intended to cover long weekends)
 0 0 * * * 	/home/backup/auto-snapshot -region="ap-southeast-2" -tags="Backup-Daily" -k=4
 
-# Run once every 30 days, and create a snapshot that lasts 60 days
+# Run on 1st month, and create a snapshot that lasts 60 days
 # at any given time, we should have a snapshot *at least* 1 month old
-0 0 */30 * * 	/home/backup/auto-snapshot -region="ap-southeast-2" -tags="Backup-Monthly" -k=60
+0 0 1 * * 	/home/backup/auto-snapshot -region="ap-southeast-2" -tags="Backup-Monthly" -k=60
 
 ```
 
 ## Building
 
-Get a [precompiled binary](https://github.com/porjo/auto-snapshot/releases) for Linux or compile from source using Go build tools
+Get a [precompiled binary](https://github.com/porjo/auto-snapshot/releases) for Linux or compile from source using Go build tools. Compilation requires the [`dep` vendoring utility](https://github.com/golang/dep).
 
 ```
-go get -u github.com/porjo/auto-snapshot
-$GOPATH/bin/auto-snapshot
+go get -d github.com/porjo/auto-snapshot
+cd $GOPATH/github.com/porjo/auto-snapshot
+dep ensure
+go build
+./auto-snapshot
 ```
