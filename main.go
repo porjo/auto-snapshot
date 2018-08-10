@@ -8,10 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/awserr"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 )
 
 type tagslice []*string
@@ -61,9 +60,9 @@ func main() {
 
 	config := aws.NewConfig()
 	if *region != "" {
-		config.Region = region
+		config.Region = *region
 	}
-	svc := ec2.New(session.New(), config)
+	svc := ec2.New(*config)
 
 	err := CreateSnapshots(svc)
 	if err != nil {
@@ -102,11 +101,11 @@ func CreateSnapshots(svc *ec2.EC2) error {
 		}
 		csi.Description = &description
 
+		var cso *ec2.CreateSnapshotOutput
 		var err error
-		var snap *ec2.Snapshot
 		retries := 0
 		for {
-			snap, err = svc.CreateSnapshot(&csi)
+			_, err := svc.CreateSnapshotRequest(&csi).Send()
 			if err != nil {
 				if aerr, ok := err.(awserr.Error); ok {
 					retries++
@@ -128,7 +127,7 @@ func CreateSnapshots(svc *ec2.EC2) error {
 
 		fmt.Printf("Name: %-15s VolumeId: %-22s Size: %4d GiB\n", volname, *volume.VolumeId, *volume.Size)
 
-		err = CreateSnapshotTags(svc, *snap.SnapshotId, volname, *volume.VolumeId)
+		err = CreateSnapshotTags(svc, *cso.SnapshotId, volname, *volume.VolumeId)
 		if err != nil {
 			return err
 		}
@@ -146,14 +145,14 @@ func PurgeSnapshots(svc *ec2.EC2) error {
 
 	dsi := ec2.DescribeSnapshotsInput{}
 
-	filter := &ec2.Filter{}
+	filter := ec2.Filter{}
 	filterName := "tag:" + PurgeAllowKey
 	filter.Name = &filterName
 	value := "true"
-	filter.Values = []*string{&value}
+	filter.Values = []string{value}
 	dsi.Filters = append(dsi.Filters, filter)
 
-	dso, err := svc.DescribeSnapshots(&dsi)
+	dso, err := svc.DescribeSnapshotsRequest(&dsi).Send()
 	if err != nil {
 		return fmt.Errorf("describeSnapshots error, %s", err)
 	}
@@ -179,7 +178,7 @@ func PurgeSnapshots(svc *ec2.EC2) error {
 			deli := ec2.DeleteSnapshotInput{}
 			deli.SnapshotId = snapshot.SnapshotId
 
-			_, err := svc.DeleteSnapshot(&deli)
+			_, err := svc.DeleteSnapshotRequest(&deli).Send()
 			if err != nil {
 				return fmt.Errorf("error purging Snapshot ID %s, err %s", *snapshot.SnapshotId, err)
 			}
@@ -198,7 +197,7 @@ func PurgeSnapshots(svc *ec2.EC2) error {
 func CreateSnapshotTags(svc *ec2.EC2, resourceID, volumeName, volumeID string) error {
 	var nKey, nVal string
 
-	var tags []*ec2.Tag
+	var tags []ec2.Tag
 
 	nKey = "Name"
 
@@ -207,7 +206,7 @@ func CreateSnapshotTags(svc *ec2.EC2, resourceID, volumeName, volumeID string) e
 	} else {
 		nVal = fmt.Sprintf("%s: %s, %s", *tagPrefix, volumeName, time.Now().Format("2006-01-02"))
 	}
-	tags = append(tags, &ec2.Tag{Key: &nKey, Value: &nVal})
+	tags = append(tags, ec2.Tag{Key: &nKey, Value: &nVal})
 
 	if *purgeAfterDays > 0 {
 		var paKey, paVal string
@@ -215,17 +214,17 @@ func CreateSnapshotTags(svc *ec2.EC2, resourceID, volumeName, volumeID string) e
 		paKey = PurgeAfterKey
 		paDate := time.Now().Add(time.Duration(*purgeAfterDays*24) * time.Hour)
 		paVal = time.Date(paDate.Year(), paDate.Month(), paDate.Day(), 0, 0, 0, 0, time.UTC).Format(PurgeAfterFormat)
-		tags = append(tags, &ec2.Tag{Key: &paKey, Value: &paVal})
+		tags = append(tags, ec2.Tag{Key: &paKey, Value: &paVal})
 
 		pKey = PurgeAllowKey
 		pVal = "true"
-		tags = append(tags, &ec2.Tag{Key: &pKey, Value: &pVal})
+		tags = append(tags, ec2.Tag{Key: &pKey, Value: &pVal})
 	}
 
 	cti := ec2.CreateTagsInput{Tags: tags}
-	cti.Resources = append(cti.Resources, &resourceID)
+	cti.Resources = append(cti.Resources, resourceID)
 
-	_, err := svc.CreateTags(&cti)
+	_, err := svc.CreateTagsRequest(&cti).Send()
 	if err != nil {
 		return err
 	}
@@ -233,19 +232,19 @@ func CreateSnapshotTags(svc *ec2.EC2, resourceID, volumeName, volumeID string) e
 	return nil
 }
 
-func GetBackupVolumes(svc *ec2.EC2) ([]*ec2.Volume, error) {
+func GetBackupVolumes(svc *ec2.EC2) ([]ec2.CreateVolumeOutput, error) {
 	dvi := ec2.DescribeVolumesInput{}
 
 	for _, tag := range tags {
-		filter := &ec2.Filter{}
+		filter := ec2.Filter{}
 		filterName := "tag:" + *tag
 		filter.Name = &filterName
 		value := "true"
-		filter.Values = []*string{&value}
+		filter.Values = []string{value}
 		dvi.Filters = append(dvi.Filters, filter)
 	}
 
-	dvo, err := svc.DescribeVolumes(&dvi)
+	dvo, err := svc.DescribeVolumesRequest(&dvi).Send()
 	if err != nil {
 		return nil, fmt.Errorf("describeVolumes error, %s", err)
 	}
@@ -254,7 +253,7 @@ func GetBackupVolumes(svc *ec2.EC2) ([]*ec2.Volume, error) {
 }
 
 // getTagValue returns the value for the first matched key
-func getTagValue(key string, tags []*ec2.Tag) (string, bool) {
+func getTagValue(key string, tags []ec2.Tag) (string, bool) {
 	for _, tag := range tags {
 		if *tag.Key == key {
 			return *tag.Value, true
